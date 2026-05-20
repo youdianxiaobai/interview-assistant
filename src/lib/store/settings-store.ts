@@ -16,7 +16,7 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       deepseekApiKey: "",
       deepseekBaseUrl: "https://api.deepseek.com",
-      deepseekModel: "deepseek-chat",
+      deepseekModel: "deepseek-flash",
       setDeepseekApiKey: (key) => set({ deepseekApiKey: key }),
       setDeepseekBaseUrl: (url) => set({ deepseekBaseUrl: url }),
       setDeepseekModel: (model) => set({ deepseekModel: model }),
