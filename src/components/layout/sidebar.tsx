@@ -2,13 +2,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Mic, Library, FileText } from "lucide-react";
+import { LayoutDashboard, Mic, Library, FileText, Settings } from "lucide-react";
 
 const items = [
   { href: "/dashboard", label: "仪表盘", icon: LayoutDashboard },
   { href: "/interview/new", label: "模拟面试", icon: Mic },
   { href: "/question-bank", label: "题库", icon: Library },
   { href: "/resume", label: "简历", icon: FileText },
+  { href: "/settings", label: "设置", icon: Settings },
 ];
 
 export function Sidebar() {
