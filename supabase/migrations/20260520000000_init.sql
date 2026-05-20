@@ -155,6 +155,7 @@ alter table user_settings enable row level security;
 alter table resumes enable row level security;
 alter table resume_analyses enable row level security;
 alter table questions enable row level security;
+alter table user_entered_questions enable row level security;
 alter table wrong_questions enable row level security;
 alter table knowledge_cards enable row level security;
 alter table interviews enable row level security;
@@ -165,7 +166,9 @@ alter table challenge_sessions enable row level security;
 
 -- RLS Policy: 公开访问
 create policy "public_access" on profiles for all using (true);
+create policy "public_access" on user_settings for all using (true);
 create policy "public_access" on questions for all using (true);
+create policy "public_access" on user_entered_questions for all using (true);
 create policy "public_access" on wrong_questions for all using (true);
 create policy "public_access" on knowledge_cards for all using (true);
 create policy "public_access" on interviews for all using (true);
