@@ -23,7 +23,9 @@ import toast from "react-hot-toast";
 export function SetupForm() {
   const router = useRouter();
   const currentUserId = useUserStore((s) => s.currentUserId);
-  const apiKey = useSettingsStore((s) => s.anthropicApiKey);
+  const apiKey = useSettingsStore((s) => s.deepseekApiKey);
+  const model = useSettingsStore((s) => s.deepseekModel);
+  const baseUrl = useSettingsStore((s) => s.deepseekBaseUrl);
   const initSession = useInterviewStore((s) => s.initSession);
 
   const [position, setPosition] = useState("跨境海运操作");
@@ -41,8 +43,8 @@ export function SetupForm() {
       <Card className="max-w-lg mx-auto mt-12">
         <CardHeader><CardTitle>设置 API Key</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">使用前需要设置 Anthropic API Key</p>
-          <div className="space-y-2"><Label>Anthropic API Key</Label><Input type="password" placeholder="sk-ant-..." onChange={(e) => useSettingsStore.getState().setAnthropicApiKey(e.target.value)} /></div>
+          <p className="text-sm text-muted-foreground">使用前需要设置 DeepSeek API Key</p>
+          <div className="space-y-2"><Label>DeepSeek API Key</Label><Input type="password" placeholder="sk-..." onChange={(e) => useSettingsStore.getState().setDeepseekApiKey(e.target.value)} /></div>
           <p className="text-xs text-muted-foreground">Key 仅保存在你的浏览器中，不会上传</p>
         </CardContent>
       </Card>
@@ -59,7 +61,7 @@ export function SetupForm() {
     }
     const presetQs = await fetchQuestionsByPosition(currentUserId, position);
     const system = buildInterviewerPrompt({ position, type, language, useResume, focusWeak, resumeSummary, weakTags: weakTags.filter(Boolean), knowledgeCards });
-    const resp = await chat(apiKey, system, `请一次性生成${questionCount}道面试题。严格输出JSON: {"questions":["题1","题2",...]}`);
+    const resp = await chat(apiKey, system, `请一次性生成${questionCount}道面试题。严格输出JSON: {"questions":["题1","题2",...]}`, model, baseUrl);
     let qTexts: string[];
     try { const j = JSON.parse(resp); qTexts = j.questions || j; } catch { qTexts = resp.split("\n").filter((l: string) => l.trim()); }
     if (presetQs.length > 0) { qTexts = [...presetQs.sort(() => Math.random() - 0.5).slice(0, Math.min(3, questionCount)).map((q) => q.content), ...qTexts.slice(0, questionCount - Math.min(3, questionCount))]; }

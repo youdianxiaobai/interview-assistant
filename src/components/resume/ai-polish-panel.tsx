@@ -10,7 +10,9 @@ import type { ResumeContent } from "@/types";
 import toast from "react-hot-toast";
 
 export function AiPolishPanel({ resumeId, content, targetPosition }: { resumeId: string; content: ResumeContent; targetPosition: string }) {
-  const apiKey = useSettingsStore((s) => s.anthropicApiKey);
+  const apiKey = useSettingsStore((s) => s.deepseekApiKey);
+  const model = useSettingsStore((s) => s.deepseekModel);
+  const baseUrl = useSettingsStore((s) => s.deepseekBaseUrl);
   const [selectedSection, setSelectedSection] = useState("summary");
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
@@ -26,7 +28,7 @@ export function AiPolishPanel({ resumeId, content, targetPosition }: { resumeId:
     setLoading(true);
     try {
       const text = getSectionText();
-      const resp = await chat(apiKey, "你是简历优化专家，擅长用 STAR 法则优化简历。直接输出优化文本，无需解释。", `优化以下简历${selectedSection === "summary" ? "个人简介" : "经历"}，目标岗位：${targetPosition}。内容：${text}。用STAR法则重写，突出与目标岗位匹配的关键词，更有冲击力和量化结果。`);
+      const resp = await chat(apiKey, "你是简历优化专家，擅长用 STAR 法则优化简历。直接输出优化文本，无需解释。", `优化以下简历${selectedSection === "summary" ? "个人简介" : "经历"}，目标岗位：${targetPosition}。内容：${text}。用STAR法则重写，突出与目标岗位匹配的关键词，更有冲击力和量化结果。`, model, baseUrl);
       setResult(resp);
     } catch { toast.error("AI 润色失败"); }
     finally { setLoading(false); }

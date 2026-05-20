@@ -15,7 +15,9 @@ import toast from "react-hot-toast";
 
 export default function TrainPage() {
   const { id } = useParams<{ id: string }>();
-  const apiKey = useSettingsStore((s) => s.anthropicApiKey);
+  const apiKey = useSettingsStore((s) => s.deepseekApiKey);
+  const model = useSettingsStore((s) => s.deepseekModel);
+  const baseUrl = useSettingsStore((s) => s.deepseekBaseUrl);
   const [resume, setResume] = useState<Resume | null>(null);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
@@ -27,14 +29,14 @@ export default function TrainPage() {
   const generateQuestion = async () => {
     if (!resume || !apiKey) return;
     setLoading(true);
-    const resp = await chat(apiKey, "你是面试官。根据候选人简历，随机问一个具体细节问题来验证真实性。直接提问，不要解释。", `简历：${JSON.stringify(resume.content)}。提出一个具体的追问。`);
+    const resp = await chat(apiKey, "你是面试官。根据候选人简历，随机问一个具体细节问题来验证真实性。直接提问，不要解释。", `简历：${JSON.stringify(resume.content)}。提出一个具体的追问。`, model, baseUrl);
     setQuestion(resp); setAnswer(""); setFeedback(""); setLoading(false);
   };
 
   const checkAnswer = async () => {
     if (!apiKey || !answer.trim()) return;
     setLoading(true);
-    const resp = await chat(apiKey, "你是面试教练。评价这个回答是否流畅、自信、与简历一致。给出具体建议。", `简历内容：${JSON.stringify(resume?.content)}。问题：${question}。回答：${answer}。评价：`);
+    const resp = await chat(apiKey, "你是面试教练。评价这个回答是否流畅、自信、与简历一致。给出具体建议。", `简历内容：${JSON.stringify(resume?.content)}。问题：${question}。回答：${answer}。评价：`, model, baseUrl);
     setFeedback(resp); setLoading(false);
   };
 

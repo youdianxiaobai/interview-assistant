@@ -19,7 +19,9 @@ import toast from "react-hot-toast";
 export default function AnalysisPage() {
   const { id } = useParams<{ id: string }>();
   const currentUserId = useUserStore((s) => s.currentUserId);
-  const apiKey = useSettingsStore((s) => s.anthropicApiKey);
+  const apiKey = useSettingsStore((s) => s.deepseekApiKey);
+  const model = useSettingsStore((s) => s.deepseekModel);
+  const baseUrl = useSettingsStore((s) => s.deepseekBaseUrl);
   const qc = useQueryClient();
   const [resume, setResume] = useState<Resume | null>(null);
   const [analysis, setAnalysis] = useState<ResumeAnalysis | null>(null);
@@ -32,7 +34,7 @@ export default function AnalysisPage() {
     setLoading(true);
     try {
       const prompt = buildResumeAnalysisPrompt(resume.target_position || "通用", JSON.stringify(resume.content));
-      const resp = await chat(apiKey, "你是资深HR，请严格按JSON格式输出。", prompt);
+      const resp = await chat(apiKey, "你是资深HR，请严格按JSON格式输出。", prompt, model, baseUrl);
       const j = JSON.parse(resp);
       const a = await saveAnalysis({ resume_id: id, user_id: currentUserId!, position_target: resume.target_position, match_score: j.match_score, strength_points: j.strength_points, risk_points: j.risk_points, predicted_questions: j.predicted_questions });
       setAnalysis(a);

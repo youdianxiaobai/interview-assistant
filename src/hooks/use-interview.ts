@@ -18,7 +18,9 @@ import toast from "react-hot-toast";
 export function useInterview() {
   const router = useRouter();
   const currentUserId = useUserStore((s) => s.currentUserId);
-  const apiKey = useSettingsStore((s) => s.anthropicApiKey);
+  const apiKey = useSettingsStore((s) => s.deepseekApiKey);
+  const model = useSettingsStore((s) => s.deepseekModel);
+  const baseUrl = useSettingsStore((s) => s.deepseekBaseUrl);
   const { session, initSession, setPhase, recordAnswer, setFeedback, nextQuestion, reset } = useInterviewStore();
 
   const startInterview = useCallback(async (config: InterviewConfig) => {
@@ -37,7 +39,7 @@ export function useInterview() {
       const system = buildInterviewerPrompt({ position: config.position, type: config.type, language: config.language, useResume: config.useResume, focusWeak: config.focusWeakPoints, resumeSummary, weakTags, knowledgeCards: "" });
       let resp = "";
       try {
-        resp = await chat(apiKey, system, `请一次性生成${config.questionCount}道面试题。输出JSON: {"questions":["题1","题2",...]}`);
+        resp = await chat(apiKey, system, `请一次性生成${config.questionCount}道面试题。输出JSON: {"questions":["题1","题2",...]}`, model, baseUrl);
         const j = JSON.parse(resp);
         qTexts = j.questions;
         if (presetQs.length > 0) qTexts = [...presetQs.slice(0, 3).map((q) => q.content), ...qTexts.slice(0, config.questionCount - 3)];
@@ -58,7 +60,7 @@ export function useInterview() {
     if (session.config.mode === "coach" && (!answer.trim() || answer.length < 20)) {
       setPhase("coach_guidance");
       const system = buildCoachPrompt(session.config.position, session.config.language);
-      const guidance = await chat(apiKey, system, `候选人回答："${answer || "(不知道)"}"。请引导他给出更好的答案。`);
+      const guidance = await chat(apiKey, system, `候选人回答："${answer || "(不知道)"}"。请引导他给出更好的答案。`, model, baseUrl);
       setFeedback({ score: 0, dimensions: [], comment: guidance, reference_answer: "", predicted_followups: [] });
       return;
     }
@@ -66,7 +68,7 @@ export function useInterview() {
     if (session.config.feedbackMode === "realtime" || session.config.feedbackMode === "combined") {
       setPhase("feedback");
       const system = buildFeedbackPrompt(session.config.position, q.text, answer);
-      const resp = await chat(apiKey, "你是资深面试官，请严格按JSON格式输出。", system);
+      const resp = await chat(apiKey, "你是资深面试官，请严格按JSON格式输出。", system, model, baseUrl);
       try {
         const fb: AIFeedback = JSON.parse(resp);
         setFeedback(fb);
