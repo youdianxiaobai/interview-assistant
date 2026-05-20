@@ -5,10 +5,11 @@ export class SpeechService {
   constructor(private lang: string = "zh-CN") {
     if (typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window)) {
       const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-      this.recognition = new SR();
-      this.recognition.lang = lang;
-      this.recognition.interimResults = true;
-      this.recognition.continuous = true;
+      const rec = new SR();
+      rec.lang = lang;
+      rec.interimResults = true;
+      rec.continuous = true;
+      this.recognition = rec;
     }
   }
 

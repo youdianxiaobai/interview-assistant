@@ -34,7 +34,7 @@ export function useInterview() {
         const { data: resumes } = await supabase.from("resumes").select("content").eq("user_id", currentUserId).eq("is_current", true).limit(1);
         resumeSummary = resumes?.[0]?.content ? JSON.stringify(resumes[0].content).slice(0, 2000) : "";
       }
-      const system = buildInterviewerPrompt({ ...config, resumeSummary, weakTags, knowledgeCards: "" });
+      const system = buildInterviewerPrompt({ position: config.position, type: config.type, language: config.language, useResume: config.useResume, focusWeak: config.focusWeakPoints, resumeSummary, weakTags, knowledgeCards: "" });
       let resp = "";
       try {
         resp = await chat(apiKey, system, `请一次性生成${config.questionCount}道面试题。输出JSON: {"questions":["题1","题2",...]}`);
