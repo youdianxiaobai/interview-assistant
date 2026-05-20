@@ -32,12 +32,14 @@ create table resumes (
   updated_at timestamptz default now()
 );
 
+create unique index idx_one_current_resume on resumes (user_id) where is_current = true;
+
 create table resume_analyses (
   id uuid primary key default gen_random_uuid(),
   resume_id uuid not null references resumes(id) on delete cascade,
   user_id uuid not null references profiles(id) on delete cascade,
   position_target text not null,
-  match_score int,
+  match_score int check (match_score >= 0 and match_score <= 100),
   strength_points jsonb default '[]',
   risk_points jsonb default '[]',
   predicted_questions jsonb default '[]',
@@ -63,6 +65,7 @@ create table questions (
 create table user_entered_questions (
   id uuid primary key default gen_random_uuid(),
   question_id uuid not null references questions(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
   company text default '',
   round text default '',
   format text default '',
@@ -143,6 +146,7 @@ create table shared_reviews (
 create table challenge_sessions (
   id uuid primary key default gen_random_uuid(),
   challenger_id uuid not null references profiles(id) on delete cascade,
+  opponent_id uuid references profiles(id) on delete cascade,
   questions jsonb default '[]',
   challenger_scores jsonb default '{}',
   opponent_scores jsonb default '{}',
