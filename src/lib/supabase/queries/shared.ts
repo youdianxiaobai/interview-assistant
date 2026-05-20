@@ -18,3 +18,7 @@ export async function createChallenge(uid: string, qids: string[]): Promise<stri
   const { data } = await supabase.from("challenge_sessions").insert({ challenger_id: uid, questions: qids }).select("id").single();
   return data!.id;
 }
+
+export async function shareReview(interviewId: string, fromUserId: string) {
+  await supabase.from("shared_reviews").insert({ interview_id: interviewId, from_user_id: fromUserId });
+}
