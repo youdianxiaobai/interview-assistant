@@ -1,78 +1,61 @@
-import OpenAI from "openai";
+/**
+ * AI 客户端 - 向后兼容层
+ * 路径: src/lib/ai/client.ts
+ * 内部使用 @/lib/deepseek 统一封装（含重试、超时、流式）
+ */
+import { chat as newChat, chatStream, chatWithImage as newChatImage, formatAIError as newFormatError } from "@/lib/deepseek";
+import type { ChatOptions } from "@/lib/deepseek";
 
-export function getClient(apiKey: string, baseUrl: string = "https://api.deepseek.com") {
-  return new OpenAI({ apiKey, baseURL: baseUrl, dangerouslyAllowBrowser: true });
-}
-
+// ── 向后兼容的 chat（支持旧 5 参数签名） ──
 export async function chat(
   apiKey: string,
   system: string,
   userMessage: string,
-  model: string = "deepseek-chat",
-  baseUrl: string = "https://api.deepseek.com"
+  modelOrOpts?: string | ChatOptions,
+  baseUrl?: string,
 ): Promise<string> {
-  const c = getClient(apiKey, baseUrl);
-  const completion = await c.chat.completions.create({
-    model,
-    max_tokens: 4096,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: userMessage },
-    ],
+  // 新签名: chat(key, sys, msg, { model, ... })
+  if (typeof modelOrOpts === "object" && modelOrOpts !== null) {
+    return newChat(apiKey, system, userMessage, modelOrOpts);
+  }
+  // 旧签名: chat(key, sys, msg, model, baseUrl)
+  return newChat(apiKey, system, userMessage, {
+    model: typeof modelOrOpts === "string" ? modelOrOpts : undefined,
   });
-  return completion.choices[0]?.message?.content ?? "";
 }
 
-export async function chatWithImage(
-  apiKey: string,
-  text: string,
-  base64Image: string,
-  mediaType: string = "image/jpeg",
-  model: string = "deepseek-chat",
-  baseUrl: string = "https://api.deepseek.com"
-): Promise<string> {
-  const c = getClient(apiKey, baseUrl);
-  const completion = await c.chat.completions.create({
-    model,
-    max_tokens: 1024,
-    messages: [
-      {
-        role: "user",
-        content: [
-          { type: "image_url", image_url: { url: `data:${mediaType};base64,${base64Image}` } },
-          { type: "text", text },
-        ],
-      },
-    ],
-  });
-  return completion.choices[0]?.message?.content ?? "";
-}
-
+// ── 向后兼容的 chatStream / streamResponse ──
 export async function streamResponse(
   apiKey: string,
   system: string,
   userMessage: string,
   onChunk: (text: string) => void,
-  model: string = "deepseek-chat",
-  baseUrl: string = "https://api.deepseek.com"
+  model?: string,
+  baseUrl?: string,
 ): Promise<string> {
-  const c = getClient(apiKey, baseUrl);
-  const stream = await c.chat.completions.create({
+  return chatStream(apiKey, system, userMessage, {
     model,
-    max_tokens: 4096,
-    messages: [
-      { role: "system", content: system },
-      { role: "user", content: userMessage },
-    ],
-    stream: true,
+    onChunk,
   });
-  let full = "";
-  for await (const chunk of stream) {
-    const delta = chunk.choices[0]?.delta?.content;
-    if (delta) {
-      full += delta;
-      onChunk(delta);
-    }
-  }
-  return full;
 }
+
+// 直接重导出流式方法
+export { chatStream };
+
+// ── 向后兼容的 chatWithImage ──
+export async function chatWithImage(
+  apiKey: string,
+  text: string,
+  base64Image: string,
+  mediaType: string = "image/jpeg",
+  model?: string,
+  baseUrl?: string,
+): Promise<string> {
+  return newChatImage(apiKey, text, base64Image, mediaType, { model });
+}
+
+// ── 向后兼容的 formatAIError ──
+export { newFormatError as formatAIError };
+
+// ── 导出新 API ──
+export { getClient, createDeepSeekAPI, chatJSON } from "@/lib/deepseek";

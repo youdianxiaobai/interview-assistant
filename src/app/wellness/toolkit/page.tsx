@@ -1,57 +1,131 @@
 "use client";
 import { AppShell } from "@/components/layout/app-shell";
 import { useSettingsStore } from "@/lib/store/settings-store";
-import { chat } from "@/lib/ai/client";
-import { useState, useEffect, useCallback } from "react";
+import { useUserStore } from "@/lib/store/user-store";
+import { supabase } from "@/lib/supabase/client";
+import { chat, formatAIError } from "@/lib/ai/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Wind, Brain, Sparkles, Shield, Play, Pause, RotateCcw, RefreshCw } from "lucide-react";
+import {
+  Wind,
+  Sparkles,
+  Play,
+  Pause,
+  RotateCcw,
+  RefreshCw,
+  Star,
+  Trophy,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
-// Breathing exercise component
+// ── 深呼吸练习 ──
 function BreathingExercise() {
   const [phase, setPhase] = useState<"idle" | "inhale" | "hold" | "exhale">("idle");
   const [seconds, setSeconds] = useState(0);
   const [running, setRunning] = useState(false);
 
   useEffect(() => {
-    if (!running) { setPhase("idle"); setSeconds(0); return; }
-    const seq = ["inhale", "hold", "exhale"] as const;
-    const durations = { inhale: 4, hold: 4, exhale: 6 };
-    const currentPhase = seq[Math.floor(seconds / 4) % 3]; // simplified
+    if (!running) {
+      setPhase("idle");
+      setSeconds(0);
+      return;
+    }
     const phaseTime = seconds % 14;
     if (phaseTime < 4) setPhase("inhale");
     else if (phaseTime < 8) setPhase("hold");
     else setPhase("exhale");
-
     const timer = setInterval(() => setSeconds((s) => s + 1), 1000);
-    if (seconds >= 70) { setRunning(false); setSeconds(0); setPhase("idle"); }
+    if (seconds >= 70) {
+      setRunning(false);
+      setSeconds(0);
+      setPhase("idle");
+    }
     return () => clearInterval(timer);
   }, [running, seconds]);
 
   const size = 160;
-  const scale = phase === "inhale" ? 1.2 : phase === "hold" ? 1.2 : phase === "exhale" ? 0.85 : 1;
-  const phaseLabel = { idle: "开始", inhale: "吸气 4 秒", hold: "屏息 4 秒", exhale: "呼气 6 秒" };
-  const phaseColor = { idle: "bg-sky-100", inhale: "bg-sky-200", hold: "bg-sky-300", exhale: "bg-sky-100" };
+  const scale =
+    phase === "inhale" ? 1.2 : phase === "hold" ? 1.2 : phase === "exhale" ? 0.85 : 1;
+  const phaseLabel = {
+    idle: "开始",
+    inhale: "吸气 4 秒",
+    hold: "屏息 4 秒",
+    exhale: "呼气 6 秒",
+  };
+  const phaseBg = {
+    idle: "bg-primary/5",
+    inhale: "bg-primary/15",
+    hold: "bg-primary/25",
+    exhale: "bg-primary/10",
+  };
 
   return (
-    <Card className="border-0 shadow-sm">
+    <Card className="rounded-xl shadow-sm border border-border/40 bg-card">
       <CardContent className="p-8 flex flex-col items-center space-y-6">
-        <div className="flex items-center gap-2"><Wind className="w-5 h-5 text-sky-500" /><h3 className="font-semibold">深呼吸练习</h3></div>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center">
+            <Wind className="w-4 h-4 text-accent" />
+          </div>
+          <h3 className="font-semibold">深呼吸练习</h3>
+        </div>
         <div
-          className={`${phaseColor[phase]} rounded-full flex items-center justify-center transition-all duration-1000`}
+          className={`${phaseBg[phase]} rounded-full flex items-center justify-center transition-all duration-1000 shadow-sm`}
           style={{ width: size * scale, height: size * scale }}
         >
-          <span className="text-5xl">{phase === "inhale" ? "🫁" : phase === "exhale" ? "🌊" : "🧘"}</span>
+          <span className="text-5xl">
+            {phase === "inhale" ? "🫁" : phase === "exhale" ? "🌊" : "🧘"}
+          </span>
         </div>
-        <Badge variant="outline" className="text-base px-4 py-1.5">{phaseLabel[phase]}</Badge>
-        <p className="text-sm text-muted-foreground text-center">4-4-6 呼吸法：吸气 4 秒 → 屏息 4 秒 → 呼气 6 秒，共 5 轮</p>
+        <Badge
+          variant="outline"
+          className="text-base px-4 py-1.5 rounded-lg border-2 border-primary/20 text-primary"
+        >
+          {phaseLabel[phase]}
+        </Badge>
+        <p className="text-sm text-muted-foreground text-center">
+          4-4-6 呼吸法：吸气 4 秒 → 屏息 4 秒 → 呼气 6 秒，共 5 轮
+        </p>
         <div className="flex gap-3">
-          <Button onClick={() => { setRunning(!running); if (phase === "idle") setSeconds(0); }} variant={running ? "outline" : "default"}>
-            {running ? <><Pause className="w-4 h-4 mr-2" />暂停</> : <><Play className="w-4 h-4 mr-2" />开始</>}
+          <Button
+            onClick={() => {
+              setRunning(!running);
+              if (phase === "idle") setSeconds(0);
+            }}
+            variant={running ? "outline" : "default"}
+            className={
+              running
+                ? "rounded-xl"
+                : "rounded-xl bg-primary hover:bg-primary/90 shadow-sm"
+            }
+          >
+            {running ? (
+              <>
+                <Pause className="w-4 h-4 mr-2" />暂停
+              </>
+            ) : (
+              <>
+                <Play className="w-4 h-4 mr-2" />开始
+              </>
+            )}
           </Button>
-          <Button variant="ghost" onClick={() => { setRunning(false); setSeconds(0); setPhase("idle"); }}>
-            <RotateCcw className="w-4 h-4 mr-2" />重置
+          <Button
+            variant="ghost"
+            className="rounded-xl"
+            onClick={() => {
+              setRunning(false);
+              setSeconds(0);
+              setPhase("idle");
+            }}
+          >
+            <RotateCcw className="w-4 h-4 mr-2" />
+            重置
           </Button>
         </div>
       </CardContent>
@@ -59,7 +133,7 @@ function BreathingExercise() {
   );
 }
 
-// Affirmation cards
+// ── 积极心理暗示卡 ──
 const DEFAULT_AFFIRMATIONS = [
   { title: "我已经很努力了", body: "每次面试都是一次练习，我在不断进步。" },
   { title: "被拒不是否定我", body: "不匹配不代表我不好，只是还没有找到对的地方。" },
@@ -69,6 +143,7 @@ const DEFAULT_AFFIRMATIONS = [
 
 function AffirmationCards() {
   const [cards, setCards] = useState(DEFAULT_AFFIRMATIONS);
+  const [index, setIndex] = useState(0);
   const apiKey = useSettingsStore((s) => s.deepseekApiKey);
   const model = useSettingsStore((s) => s.deepseekModel);
   const baseUrl = useSettingsStore((s) => s.deepseekBaseUrl);
@@ -78,27 +153,75 @@ function AffirmationCards() {
     if (!apiKey) return;
     setLoading(true);
     try {
-      const resp = await chat(apiKey, "你是积极心理学专家。生成5条适合求职者的积极心理暗示。输出JSON: [{\"title\":\"...\",\"body\":\"...\"}]", "", model, baseUrl);
+      const resp = await chat(
+        apiKey,
+        "你是积极心理学专家。生成5条适合求职者的积极心理暗示。输出JSON: [{\"title\":\"...\",\"body\":\"...\"}]",
+        "",
+        model,
+        baseUrl,
+      );
       const j = JSON.parse(resp);
-      if (Array.isArray(j)) setCards(j);
-    } catch {}
+      if (Array.isArray(j)) {
+        setCards(j);
+        setIndex(0);
+      }
+    } catch (err) {
+      console.error("AI 心理暗示卡生成失败:", formatAIError(err));
+      toast.error("AI 生成失败，请检查 API 设置");
+    }
     setLoading(false);
   };
 
+  const current = cards[index % cards.length];
+
   return (
-    <Card className="border-0 shadow-sm">
+    <Card className="rounded-xl shadow-sm border border-border/40 bg-card">
       <CardContent className="p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2"><Sparkles className="w-5 h-5 text-amber-500" /><h3 className="font-semibold">积极心理暗示卡</h3></div>
-          <Button variant="outline" size="sm" onClick={generate} disabled={loading || !apiKey}>
-            <RefreshCw className={`w-4 h-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />AI 换一批
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-accent" />
+            </div>
+            <h3 className="font-semibold">积极心理暗示卡</h3>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-xl"
+            onClick={generate}
+            disabled={loading || !apiKey}
+          >
+            <RefreshCw className={`w-4 h-4 mr-1.5 ${loading ? "animate-spin" : ""}`} />
+            AI 换一批
           </Button>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          {cards.map((c, i) => (
-            <div key={i} className="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-rose-50 border border-amber-100">
-              <p className="font-semibold text-sm mb-1">{c.title}</p>
-              <p className="text-xs text-muted-foreground">{c.body}</p>
+
+        {/* Current card */}
+        <div
+          className="p-6 rounded-2xl bg-accent/5 border border-accent/15 text-center cursor-pointer card-hover"
+          onClick={() => setIndex((i) => i + 1)}
+        >
+          <p className="font-semibold text-lg mb-2">{current.title}</p>
+          <p className="text-sm text-muted-foreground">{current.body}</p>
+          <p className="text-xs text-muted-foreground mt-3">
+            点击切换 ({index + 1}/{cards.length})
+          </p>
+        </div>
+
+        {/* Mini grid of all cards */}
+        <div className="grid grid-cols-2 gap-2">
+          {cards.slice(0, 4).map((c, i) => (
+            <div
+              key={i}
+              onClick={() => setIndex(i)}
+              className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                i === index % cards.length
+                  ? "bg-accent/10 border-accent/30"
+                  : "bg-muted/30 border-border/20 hover:bg-muted/50"
+              }`}
+            >
+              <p className="font-medium text-xs mb-0.5 truncate">{c.title}</p>
+              <p className="text-xs text-muted-foreground truncate">{c.body}</p>
             </div>
           ))}
         </div>
@@ -107,80 +230,144 @@ function AffirmationCards() {
   );
 }
 
-// Anxiety reframing
-function AnxietyReframe() {
-  const apiKey = useSettingsStore((s) => s.deepseekApiKey);
-  const model = useSettingsStore((s) => s.deepseekModel);
-  const baseUrl = useSettingsStore((s) => s.deepseekBaseUrl);
-  const [negative, setNegative] = useState("");
-  const [reframe, setReframe] = useState("");
-  const [loading, setLoading] = useState(false);
+// ── 高光时刻 ──
+async function fetchAchievements(userId: string) {
+  const { data } = await supabase
+    .from("achievements")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(20);
+  return data ?? [];
+}
 
-  const handleReframe = async () => {
-    if (!negative.trim() || !apiKey) return;
-    setLoading(true);
-    try {
-      const resp = await chat(apiKey, "你是认知行为疗法专家。帮对方识别负面想法中的认知扭曲，用理性思考重新框架。直接输出：1. 识别扭曲类型 2. 理性回应 3. 替代想法。控制在150字内。", `我的负面想法：${negative}`, model, baseUrl);
-      setReframe(resp);
-    } catch {}
-    setLoading(false);
+function HighlightMoments() {
+  const { currentUserId } = useUserStore();
+  const qc = useQueryClient();
+  const { data: achievements } = useQuery({
+    queryKey: ["achievements", currentUserId],
+    queryFn: () => fetchAchievements(currentUserId!),
+    enabled: !!currentUserId,
+    staleTime: 30000,
+  });
+  const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const addAchievement = async () => {
+    if (!text.trim() || !currentUserId) return;
+    setSaving(true);
+    const { error } = await supabase.from("achievements").insert({
+      user_id: currentUserId,
+      content: text.trim(),
+    });
+    if (error) {
+      toast.error("保存失败");
+    } else {
+      toast.success("高光时刻已记录");
+      setText("");
+      qc.invalidateQueries({ queryKey: ["achievements", currentUserId] });
+    }
+    setSaving(false);
+  };
+
+  const deleteAchievement = async (id: string) => {
+    await supabase.from("achievements").delete().eq("id", id);
+    toast.success("已删除");
+    qc.invalidateQueries({ queryKey: ["achievements", currentUserId] });
   };
 
   return (
-    <Card className="border-0 shadow-sm">
+    <Card className="rounded-xl shadow-sm border border-border/40 bg-card">
       <CardContent className="p-6 space-y-4">
-        <div className="flex items-center gap-2"><Brain className="w-5 h-5 text-purple-500" /><h3 className="font-semibold">焦虑认知重构</h3></div>
-        <p className="text-sm text-muted-foreground">写下你脑中反复出现的负面想法，AI 帮你识别认知扭曲并重新思考。</p>
-        <textarea
-          value={negative}
-          onChange={(e) => setNegative(e.target.value)}
-          placeholder="比如：我觉得自己肯定找不到好工作..."
-          className="w-full border rounded-xl p-3 text-sm resize-none"
-          rows={3}
-        />
-        <Button onClick={handleReframe} disabled={!negative.trim() || loading || !apiKey} className="w-full">
-          {loading ? "思考中..." : "重新框架"}
-        </Button>
-        {reframe && (
-          <div className="p-4 rounded-xl bg-purple-50 text-sm leading-relaxed">
-            <ReactMarkdown>{reframe}</ReactMarkdown>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center">
+            <Trophy className="w-4 h-4 text-accent" />
           </div>
+          <h3 className="font-semibold">高光时刻</h3>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          记录那些让你骄傲的瞬间 — 无论大小，成功拿到面试机会、完成一次不错的回答、甚至只是勇敢投递了简历。
+        </p>
+
+        {/* Add */}
+        <div className="flex gap-2">
+          <Input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="写下最近的成就或进步..."
+            className="rounded-xl"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addAchievement();
+            }}
+          />
+          <Button
+            size="icon"
+            className="rounded-xl bg-accent hover:bg-accent/90 shadow-sm flex-shrink-0"
+            onClick={addAchievement}
+            disabled={!text.trim() || saving}
+          >
+            <Plus className="w-4 h-4" />
+          </Button>
+        </div>
+
+        {/* List */}
+        {achievements && achievements.length > 0 && (
+          <div className="space-y-2">
+            {achievements.map((a: any) => (
+              <div
+                key={a.id}
+                className="flex items-start gap-3 p-3 rounded-xl bg-muted/30 border border-border/20 group"
+              >
+                <Star className="w-4 h-4 text-accent flex-shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm">{a.content}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {new Date(a.created_at).toLocaleDateString("zh-CN", {
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </p>
+                </div>
+                <button
+                  onClick={() => deleteAchievement(a.id)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive flex-shrink-0"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {(!achievements || achievements.length === 0) && (
+          <p className="text-sm text-muted-foreground text-center py-4">
+            还没有记录，写下你的第一个高光时刻吧
+          </p>
         )}
       </CardContent>
     </Card>
   );
 }
 
-import ReactMarkdown from "react-markdown";
-
+// ── 页面 ──
 export default function ToolkitPage() {
   return (
     <AppShell>
-      <div className="max-w-2xl mx-auto space-y-6">
-        <h2 className="text-2xl font-bold">减压工具箱</h2>
+      <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-sm">
+            <Wind className="w-5 h-5 text-primary-foreground" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold font-display">减压工具箱</h2>
+            <p className="text-sm text-muted-foreground">
+              面试压力管理工具，帮你保持最佳状态
+            </p>
+          </div>
+        </div>
         <BreathingExercise />
         <AffirmationCards />
-        <AnxietyReframe />
-        {/* Recovery protocol */}
-        <Card className="border-0 shadow-sm">
-          <CardContent className="p-6 space-y-3">
-            <div className="flex items-center gap-2"><Shield className="w-5 h-5 text-green-500" /><h3 className="font-semibold">被拒恢复三步走</h3></div>
-            <div className="space-y-3 text-sm">
-              <div className="p-3 rounded-xl bg-red-50">
-                <p className="font-medium text-red-700 mb-1">立即期 · 当天</p>
-                <p className="text-red-600/70">允许自己难过，想哭就哭。暂时别看招聘信息，做件让你开心的小事。</p>
-              </div>
-              <div className="p-3 rounded-xl bg-amber-50">
-                <p className="font-medium text-amber-700 mb-1">冷静期 · 1-3 天后</p>
-                <p className="text-amber-600/70">客观回顾失败原因，沉淀错题，重新校准方向。</p>
-              </div>
-              <div className="p-3 rounded-xl bg-green-50">
-                <p className="font-medium text-green-700 mb-1">重启期 · 3-7 天后</p>
-                <p className="text-green-600/70">用新的认知重新出发，把经历变成经验。</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <HighlightMoments />
       </div>
     </AppShell>
   );

@@ -8,28 +8,44 @@ export function useVoice(lang: string = "zh-CN") {
   const [speaking, setSpeaking] = useState(false);
   const [interimText, setInterimText] = useState("");
 
-  const svc = () => {
+  const getService = () => {
     if (!serviceRef.current) serviceRef.current = new SpeechService(lang);
     return serviceRef.current;
   };
 
-  const startListen = useCallback((onResult: (text: string) => void) => {
-    setListening(true);
-    svc().startListening(
-      (text, isFinal) => { setInterimText(isFinal ? "" : text); if (isFinal) onResult(text); },
-      () => setListening(false)
-    );
+  const startListen = useCallback(
+    (onResult: (text: string) => void) => {
+      setListening(true);
+      getService().startListening(
+        (text, isFinal) => {
+          setInterimText(isFinal ? "" : text);
+          if (isFinal) onResult(text);
+        },
+        () => setListening(false)
+      );
+    },
+    // getService is stable — it reads from ref
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lang]);
+    [lang]
+  );
 
-  const stopListen = useCallback(() => { svc().stopListening(); setListening(false); }, []);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const stopListen = useCallback(() => {
+    getService().stopListening();
+    setListening(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const speakQuestion = useCallback((text: string, rate = 1) => {
     setSpeaking(true);
-    svc().speak(text, rate, () => setSpeaking(false));
+    getService().speak(text, rate, () => setSpeaking(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const stopSpeak = useCallback(() => { svc().stopSpeaking(); setSpeaking(false); }, []);
+
+  const stopSpeak = useCallback(() => {
+    getService().stopSpeaking();
+    setSpeaking(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return { listening, speaking, interimText, startListen, stopListen, speakQuestion, stopSpeak };
 }

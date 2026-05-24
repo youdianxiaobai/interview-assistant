@@ -1,13 +1,13 @@
 "use client";
 import { AppShell } from "@/components/layout/app-shell";
 import { useSettingsStore } from "@/lib/store/settings-store";
-import { chat } from "@/lib/ai/client";
+import { chat, formatAIError } from "@/lib/ai/client";
+import toast from "react-hot-toast";
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Send, Heart, MessageCircle } from "lucide-react";
+import { Send, Heart, Sparkles, ChevronRight } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 const SCENE_SUGGESTIONS = [
@@ -49,13 +49,18 @@ export default function WellnessChatPage() {
   const model = useSettingsStore((s) => s.deepseekModel);
   const baseUrl = useSettingsStore((s) => s.deepseekBaseUrl);
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "嗨，我是你的求职心理伙伴。有什么想跟我聊聊的吗？无论你在经历什么，我都在这里听着 💙" },
+    {
+      role: "assistant",
+      content: "嗨，我是你的求职心理伙伴。有什么想跟我聊聊的吗？无论你在经历什么，我都在这里听着。",
+    },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight); }, [messages]);
+  useEffect(() => {
+    scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
+  }, [messages]);
 
   const sendMessage = async (text: string) => {
     if (!text.trim() || !apiKey || loading) return;
@@ -65,11 +70,28 @@ export default function WellnessChatPage() {
     setLoading(true);
 
     try {
-      const history = [...messages, userMsg].map((m) => `${m.role === "assistant" ? "咨询师" : "我"}: ${m.content}`).join("\n");
-      const resp = await chat(apiKey, COUNSELOR_SYSTEM, `对话历史：\n${history}\n\n请用温暖的专业口吻回复。`, model, baseUrl);
+      const history = [...messages, userMsg]
+        .map((m) => `${m.role === "assistant" ? "咨询师" : "我"}: ${m.content}`)
+        .join("\n");
+      const resp = await chat(
+        apiKey,
+        COUNSELOR_SYSTEM,
+        `对话历史：\n${history}\n\n请用温暖的专业口吻回复。`,
+        model,
+        baseUrl,
+      );
       setMessages((prev) => [...prev, { role: "assistant", content: resp }]);
-    } catch {
-      setMessages((prev) => [...prev, { role: "assistant", content: "抱歉，我暂时无法回应。请检查网络或 API 设置后重试 💙" }]);
+    } catch (err) {
+      const msg = formatAIError(err);
+      console.error("AI 心理疏导调用失败:", msg);
+      toast.error(`AI 响应失败: ${msg}`);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `抱歉，我暂时无法回应。\n\n> 错误: ${msg}\n\n请检查网络或 API 设置后重试。`,
+        },
+      ]);
     } finally {
       setLoading(false);
     }
@@ -77,51 +99,62 @@ export default function WellnessChatPage() {
 
   return (
     <AppShell>
-      <div className="max-w-2xl mx-auto h-[calc(100vh-8rem)] flex flex-col">
+      <div className="max-w-2xl mx-auto h-[calc(100vh-8rem)] flex flex-col animate-fade-in">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center">
-            <Heart className="w-5 h-5 text-rose-500" />
+          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shadow-sm">
+            <Heart className="w-5 h-5 text-primary-foreground" />
           </div>
           <div>
-            <h2 className="font-semibold">AI 心理疏导</h2>
+            <h2 className="font-semibold font-display">AI 心理疏导</h2>
             <p className="text-xs text-muted-foreground">你的专属求职心理伙伴</p>
           </div>
         </div>
 
-        {/* Messages */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 mb-4 pr-2">
           {messages.map((msg, i) => (
-            <div key={i} className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}>
+            <div
+              key={i}
+              className={`flex gap-3 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
+            >
               <Avatar className="w-8 h-8 flex-shrink-0">
-                <AvatarFallback className={msg.role === "assistant" ? "bg-rose-100 text-rose-600" : "bg-primary/10 text-primary"}>
+                <AvatarFallback
+                  className={
+                    msg.role === "assistant"
+                      ? "bg-primary/10 text-primary"
+                      : "bg-primary text-primary-foreground text-xs"
+                  }
+                >
                   {msg.role === "assistant" ? <Heart className="w-3.5 h-3.5" /> : "我"}
                 </AvatarFallback>
               </Avatar>
-              <div className={`rounded-2xl px-4 py-2.5 max-w-[80%] text-sm leading-relaxed ${
-                msg.role === "assistant" ? "bg-muted" : "bg-primary text-primary-foreground"
-              }`}>
+              <div
+                className={`rounded-2xl px-4 py-2.5 max-w-[80%] text-sm leading-relaxed ${
+                  msg.role === "assistant"
+                    ? "bg-muted text-foreground border border-border/30"
+                    : "bg-primary text-primary-foreground"
+                }`}
+              >
                 <ReactMarkdown>{msg.content}</ReactMarkdown>
               </div>
             </div>
           ))}
           {loading && (
             <div className="flex gap-2 items-center px-4">
-              <div className="w-2 h-2 rounded-full bg-rose-400 animate-bounce" style={{ animationDelay: "0ms" }} />
-              <div className="w-2 h-2 rounded-full bg-rose-400 animate-bounce" style={{ animationDelay: "150ms" }} />
-              <div className="w-2 h-2 rounded-full bg-rose-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+              <div className="w-2 h-2 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: "0ms" }} />
+              <div className="w-2 h-2 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: "150ms" }} />
+              <div className="w-2 h-2 rounded-full bg-primary/60 animate-bounce" style={{ animationDelay: "300ms" }} />
             </div>
           )}
         </div>
 
-        {/* Scene suggestions */}
         {messages.length <= 1 && (
-          <div className="flex gap-2 mb-3 overflow-x-auto pb-1 flex-shrink-0">
+          <div className="flex gap-2 mb-3 overflow-x-auto pb-1 flex-shrink-0 scrollbar-hide">
             {SCENE_SUGGESTIONS.map((s) => (
               <button
                 key={s.label}
                 onClick={() => sendMessage(s.prompt)}
                 disabled={!apiKey}
-                className="px-3 py-1.5 rounded-full border text-xs whitespace-nowrap hover:bg-rose-50 hover:border-rose-300 transition-colors flex-shrink-0"
+                className="px-3.5 py-2 rounded-xl border border-primary/20 text-xs whitespace-nowrap hover:bg-primary/5 hover:border-primary/40 transition-colors flex-shrink-0 text-foreground/70"
               >
                 {s.label}
               </button>
@@ -129,23 +162,34 @@ export default function WellnessChatPage() {
           </div>
         )}
 
-        {/* Input */}
         <div className="flex gap-2 flex-shrink-0">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage(input);
+              }
+            }}
             placeholder="说说你的感受..."
             rows={2}
-            className="resize-none"
+            className="resize-none rounded-xl"
             disabled={!apiKey}
           />
-          <Button size="icon" className="h-auto" onClick={() => sendMessage(input)} disabled={!input.trim() || loading || !apiKey}>
+          <Button
+            size="icon"
+            className="h-auto rounded-xl bg-primary hover:bg-primary/90 shadow-sm"
+            onClick={() => sendMessage(input)}
+            disabled={!input.trim() || loading || !apiKey}
+          >
             <Send className="w-4 h-4" />
           </Button>
         </div>
         {!apiKey && (
-          <p className="text-xs text-muted-foreground text-center mt-2">请先在设置页面配置 DeepSeek API Key</p>
+          <p className="text-xs text-muted-foreground text-center mt-2">
+            请先在设置页面配置 DeepSeek API Key
+          </p>
         )}
       </div>
     </AppShell>
