@@ -6,7 +6,7 @@ import { useUserStore } from "@/lib/store/user-store";
 import { useSettingsStore } from "@/lib/store/settings-store";
 import { chat } from "@/lib/ai/client";
 import { buildResumeAnalysisPrompt } from "@/lib/ai/prompts/resume-analyzer";
-import { saveAnalysis } from "@/lib/supabase/queries/resumes";
+import { saveAnalysis, fetchLatestAnalysis } from "@/lib/supabase/queries/resumes";
 import { createQuestion } from "@/lib/supabase/queries/questions";
 import { supabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -47,15 +47,14 @@ export default function AnalysisPage() {
   const [analyzing, setAnalyzing] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from("resumes")
-      .select("*")
-      .eq("id", id)
-      .single()
-      .then(({ data }) => {
-        setResume(data);
-        setPageLoading(false);
-      });
+    Promise.all([
+      supabase.from("resumes").select("*").eq("id", id).single(),
+      fetchLatestAnalysis(id),
+    ]).then(([{ data }, savedAnalysis]) => {
+      setResume(data);
+      if (savedAnalysis) setAnalysis(savedAnalysis);
+      setPageLoading(false);
+    });
   }, [id]);
 
   const runAnalysis = async () => {

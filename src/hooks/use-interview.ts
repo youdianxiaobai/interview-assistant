@@ -56,7 +56,7 @@ export function useInterview() {
       } catch (err) { console.error("AI 题目生成解析失败:", formatAIError(err)); qTexts = resp.split("\n").filter((l: string) => l.trim() && l.length > 10).slice(0, config.questionCount); }
     }
     const interview = await createInterview({ user_id: currentUserId, mode: config.mode, position: config.position, type: config.type, language: config.language, score: {}, duration: 0 });
-    initSession(config, qTexts);
+    initSession(interview.id, config, qTexts);
     router.push(`/interview/${interview.id}`);
     toast.success(config.mode === "coach" ? "教练模式 — AI 会一步步引导你" : config.mode === "mock" ? "模拟模式 — 当作真实面试来对待！" : "面试开始！");
   }, [currentUserId, apiKey, model, baseUrl, initSession, router]);

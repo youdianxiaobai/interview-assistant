@@ -5,14 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 
 import { useInterviewStore } from "@/lib/store/interview-store";
-import { useUserStore } from "@/lib/store/user-store";
 import { shareReview } from "@/lib/supabase/queries/shared";
+import { fetchInterview, fetchInterviewQAs } from "@/lib/supabase/queries/interviews";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDuration } from "@/lib/utils";
-import type { AIFeedback } from "@/types";
+import type { AIFeedback, InterviewSession, InterviewConfig, InterviewPhase } from "@/types";
 import {
   RadarChart,
   PolarGrid,
@@ -38,10 +38,6 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 const MODE_LABEL: Record<string, string> = {
   practice: "练习模式",
   coach: "教练模式",
@@ -66,10 +62,6 @@ function priorityLabel(priority: string) {
   if (priority === "medium") return "建议";
   return "可选";
 }
-
-// ---------------------------------------------------------------------------
-// Skeleton
-// ---------------------------------------------------------------------------
 
 function ResultSkeleton() {
   return (
@@ -104,11 +96,8 @@ function ResultSkeleton() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Empty State
-// ---------------------------------------------------------------------------
-
 function EmptyResult({ onBack }: { onBack: () => void }) {
+  const router = useRouter();
   return (
     <AppShell>
       <div className="max-w-3xl mx-auto flex flex-col items-center justify-center py-20 text-center animate-fade-in">
@@ -125,7 +114,7 @@ function EmptyResult({ onBack }: { onBack: () => void }) {
           <Button variant="outline" onClick={onBack} className="rounded-xl">
             返回首页
           </Button>
-          <Button onClick={() => window.location.href = "/interview/new"} className="rounded-xl">
+          <Button onClick={() => router.push("/interview/new")} className="rounded-xl">
             开始新面试
             <ArrowRight className="w-4 h-4 ml-1.5" />
           </Button>
@@ -135,28 +124,74 @@ function EmptyResult({ onBack }: { onBack: () => void }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main Page
-// ---------------------------------------------------------------------------
+function buildSessionFromSupabase(interview: {
+  id: string; user_id: string; mode: string; position: string; type: string;
+  language: string; score: Record<string, number>; duration: number; created_at: string;
+}, qas: {
+  question_text: string; user_answer_text: string;
+  ai_feedback: AIFeedback | null; score_breakdown: Record<string, number>;
+}[]): InterviewSession {
+  return {
+    id: interview.id,
+    config: {
+      userId: interview.user_id,
+      position: interview.position,
+      type: interview.type as InterviewConfig["type"],
+      mode: interview.mode as InterviewConfig["mode"],
+      interactionMode: "text",
+      feedbackMode: "realtime",
+      language: (interview.language as InterviewConfig["language"]) || "zh",
+      useResume: false,
+      focusWeakPoints: false,
+      questionCount: qas.length,
+    },
+    phase: "finished" as InterviewPhase,
+    currentQuestionIndex: qas.length,
+    questions: qas.map((qa) => ({
+      text: qa.question_text,
+      userAnswer: qa.user_answer_text,
+      feedback: qa.ai_feedback,
+    })),
+    startTime: null,
+    elapsedSeconds: interview.duration || 0,
+  };
+}
 
 export default function ResultPage() {
   const { id } = useParams<{ id: string }>();
-  const session = useInterviewStore((s) => s.session);
+  const storeSession = useInterviewStore((s) => s.session);
   const finalReport = useInterviewStore((s) => s.finalReport);
-  const profiles = useUserStore((s) => s.profiles);
   const router = useRouter();
   const reset = useInterviewStore((s) => s.reset);
 
-  const [hydrated, setHydrated] = useState(false);
+  const [session, setSession] = useState<InterviewSession | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Give Zustand store a moment to hydrate from parent / previous page
-    const t = setTimeout(() => setHydrated(true), 100);
-    return () => clearTimeout(t);
-  }, []);
+    // Use stored session if it matches the URL interview ID
+    if (storeSession && storeSession.id === id) {
+      setSession(storeSession);
+      setLoading(false);
+      return;
+    }
 
-  // ---- Loading ----
-  if (!hydrated) {
+    // Otherwise load from Supabase (historical interview)
+    let cancelled = false;
+    (async () => {
+      const [iv, qas] = await Promise.all([
+        fetchInterview(id),
+        fetchInterviewQAs(id),
+      ]);
+      if (cancelled) return;
+      if (iv && qas.length > 0) {
+        setSession(buildSessionFromSupabase(iv, qas));
+      }
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [id, storeSession]);
+
+  if (loading) {
     return (
       <AppShell>
         <ResultSkeleton />
@@ -164,12 +199,10 @@ export default function ResultPage() {
     );
   }
 
-  // ---- Empty ----
   if (!session) {
-    return <EmptyResult onBack={() => router.push("/")} />;
+    return <EmptyResult onBack={() => router.push("/dashboard")} />;
   }
 
-  // ---- Derived data ----
   const answeredQs = session.questions.filter((q) => q.feedback);
   const allScores = answeredQs.map((q) => q.feedback!.score);
   const avgScore =
@@ -204,7 +237,6 @@ export default function ResultPage() {
     { range: "5分以下", count: allScores.filter((s) => s < 5).length },
   ];
 
-  // ---- Actions ----
   const handleShare = async () => {
     await shareReview(id, session.config.userId);
     toast.success("已分享复盘");
@@ -212,7 +244,7 @@ export default function ResultPage() {
 
   const handleBack = () => {
     reset();
-    router.push("/");
+    router.push("/dashboard");
   };
 
   const handleRetry = () => {
@@ -220,13 +252,10 @@ export default function ResultPage() {
     startTransition(() => router.push("/interview/new"));
   };
 
-  // ---- Render ----
   return (
     <AppShell>
       <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
-        {/* ================================================================= */}
-        {/* Header                                                           */}
-        {/* ================================================================= */}
+        {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 className="font-display text-2xl font-bold text-foreground">
@@ -248,11 +277,8 @@ export default function ResultPage() {
           </div>
         </div>
 
-        {/* ================================================================= */}
-        {/* Score overview cards                                             */}
-        {/* ================================================================= */}
+        {/* Score overview cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {/* Overall score */}
           <div className="relative overflow-hidden rounded-2xl bg-primary p-5 text-primary-foreground shadow-md col-span-2 sm:col-span-1">
             <p className="text-primary-foreground/60 text-xs font-medium mb-1">
               综合评分
@@ -265,7 +291,6 @@ export default function ResultPage() {
             </p>
           </div>
 
-          {/* Question count */}
           <Card className="border border-border/40 shadow-sm rounded-2xl bg-card">
             <CardContent className="p-5">
               <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-2">
@@ -278,7 +303,6 @@ export default function ResultPage() {
             </CardContent>
           </Card>
 
-          {/* Answered count */}
           <Card className="border border-border/40 shadow-sm rounded-2xl bg-card">
             <CardContent className="p-5">
               <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-2">
@@ -291,7 +315,6 @@ export default function ResultPage() {
             </CardContent>
           </Card>
 
-          {/* Duration */}
           <Card className="border border-border/40 shadow-sm rounded-2xl bg-card">
             <CardContent className="p-5">
               <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-2">
@@ -305,12 +328,9 @@ export default function ResultPage() {
           </Card>
         </div>
 
-        {/* ================================================================= */}
-        {/* AI Comprehensive Report                                          */}
-        {/* ================================================================= */}
+        {/* AI Comprehensive Report */}
         {finalReport && (
           <Card className="border border-border/40 shadow-sm rounded-2xl bg-card overflow-hidden">
-            {/* Report header */}
             <div className="bg-primary px-6 py-5 text-primary-foreground">
               <div className="flex items-center gap-2">
                 <Lightbulb className="w-5 h-5" />
@@ -321,7 +341,6 @@ export default function ResultPage() {
             </div>
 
             <CardContent className="p-6 space-y-6">
-              {/* Overall score + summary */}
               <div className="text-center py-3">
                 <p className="text-5xl font-display font-extrabold text-primary">
                   {finalReport.overallScore}
@@ -334,7 +353,6 @@ export default function ResultPage() {
                 {finalReport.summary}
               </p>
 
-              {/* Strengths & Weaknesses */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-800/30">
                   <p className="font-semibold text-emerald-700 dark:text-emerald-400 text-sm mb-2">
@@ -369,7 +387,6 @@ export default function ResultPage() {
                 </div>
               </div>
 
-              {/* Action Plan */}
               <div>
                 <p className="font-semibold text-sm text-foreground mb-3 flex items-center gap-1.5">
                   <Target className="w-4 h-4 text-primary" />
@@ -396,7 +413,6 @@ export default function ResultPage() {
                 </div>
               </div>
 
-              {/* Position match + next steps */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-800/30">
                   <p className="font-semibold text-blue-700 dark:text-blue-400 text-sm mb-1">
@@ -419,9 +435,7 @@ export default function ResultPage() {
           </Card>
         )}
 
-        {/* ================================================================= */}
-        {/* Radar chart                                                      */}
-        {/* ================================================================= */}
+        {/* Radar chart */}
         {radarData.length > 0 && (
           <Card className="border border-border/40 shadow-sm rounded-2xl bg-card">
             <CardHeader>
@@ -453,9 +467,7 @@ export default function ResultPage() {
           </Card>
         )}
 
-        {/* ================================================================= */}
-        {/* Score distribution                                               */}
-        {/* ================================================================= */}
+        {/* Score distribution */}
         {allScores.length > 0 && (
           <Card className="border border-border/40 shadow-sm rounded-2xl bg-card">
             <CardHeader>
@@ -486,9 +498,7 @@ export default function ResultPage() {
           </Card>
         )}
 
-        {/* ================================================================= */}
-        {/* Per-question detail                                              */}
-        {/* ================================================================= */}
+        {/* Per-question detail */}
         <div className="space-y-4">
           <h3 className="font-display text-lg font-bold text-foreground">
             逐题详情
@@ -499,7 +509,6 @@ export default function ResultPage() {
               className="border border-border/40 shadow-sm rounded-2xl bg-card overflow-hidden"
             >
               <CardContent className="p-5 space-y-4">
-                {/* Question header */}
                 <div className="flex items-start gap-3">
                   <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary text-xs font-bold flex-shrink-0">
                     {i + 1}
@@ -517,7 +526,6 @@ export default function ResultPage() {
                   )}
                 </div>
 
-                {/* User answer */}
                 <div className="p-3 rounded-xl bg-muted/50">
                   <p className="text-xs font-medium text-muted-foreground mb-1">
                     你的回答
@@ -529,10 +537,8 @@ export default function ResultPage() {
                   </p>
                 </div>
 
-                {/* Feedback */}
                 {q.feedback && (
                   <div className="space-y-3">
-                    {/* Dimension scores */}
                     {q.feedback.dimensions.length > 0 && (
                       <div className="flex gap-2 flex-wrap">
                         {q.feedback.dimensions.map((d, j) => (
@@ -546,12 +552,10 @@ export default function ResultPage() {
                       </div>
                     )}
 
-                    {/* Comment */}
                     <p className="text-sm text-muted-foreground leading-relaxed">
                       {q.feedback.comment}
                     </p>
 
-                    {/* Reference answer */}
                     {q.feedback.reference_answer && (
                       <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-800/30">
                         <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-1">
@@ -569,9 +573,7 @@ export default function ResultPage() {
           ))}
         </div>
 
-        {/* ================================================================= */}
-        {/* Bottom actions                                                   */}
-        {/* ================================================================= */}
+        {/* Bottom actions */}
         <div className="flex items-center justify-center gap-3 pt-4 pb-8">
           <Button variant="outline" onClick={handleBack} className="rounded-xl">
             返回首页

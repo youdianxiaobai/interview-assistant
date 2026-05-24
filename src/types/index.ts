@@ -118,6 +118,7 @@ export interface ChallengeSession {
 
 // ============== 面试运行时状态 ==============
 export interface InterviewSession {
+  id: string;
   config: InterviewConfig;
   phase: InterviewPhase;
   currentQuestionIndex: number;

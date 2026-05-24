@@ -20,6 +20,15 @@ export async function fetchHistory(userId: string): Promise<Interview[]> {
   return data ?? [];
 }
 
+export async function fetchInterviewQAs(interviewId: string): Promise<InterviewQA[]> {
+  const { data } = await supabase
+    .from("interview_qa")
+    .select("*")
+    .eq("interview_id", interviewId)
+    .order("created_at", { ascending: true });
+  return data ?? [];
+}
+
 export async function updateInterview(id: string, u: Partial<Interview>) {
   await supabase.from("interviews").update(u).eq("id", id);
 }

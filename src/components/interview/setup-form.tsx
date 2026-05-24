@@ -215,6 +215,7 @@ export function SetupForm() {
       });
 
       initSession(
+        interview.id,
         {
           userId: currentUserId,
           position,

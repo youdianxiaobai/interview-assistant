@@ -60,7 +60,11 @@ export default function HomePage() {
   }, [setProfiles]);
 
   useEffect(() => {
-    if (currentUserId) router.push("/dashboard");
+    // Only auto-redirect on first app load (session scope), not on manual navigation to "/"
+    if (currentUserId && !sessionStorage.getItem("interview-redirected")) {
+      sessionStorage.setItem("interview-redirected", "1");
+      router.push("/dashboard");
+    }
   }, [currentUserId, router]);
 
   const handleCreate = async () => {

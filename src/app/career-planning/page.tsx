@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { useSettingsStore } from "@/lib/store/settings-store";
@@ -138,9 +138,25 @@ export default function CareerPlanningPage() {
 
   const [position, setPosition] = useState(currentUser?.role || "");
   const [background, setBackground] = useState("");
+  const storageKey = `career-analysis-${currentUser?.id ?? "anon"}-${position}`;
   const [loading, setLoading] = useState(false);
   const [analysis, setAnalysis] = useState<CareerAnalysis | null>(null);
   const [error, setError] = useState("");
+
+  // Load persisted analysis on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) setAnalysis(JSON.parse(saved));
+    } catch { /* ignore corrupt data */ }
+  }, [storageKey]);
+
+  // Persist analysis whenever it changes
+  useEffect(() => {
+    if (analysis) {
+      localStorage.setItem(storageKey, JSON.stringify(analysis));
+    }
+  }, [analysis, storageKey]);
 
   const handleAnalyze = async () => {
     if (!position.trim() || !apiKey) return;

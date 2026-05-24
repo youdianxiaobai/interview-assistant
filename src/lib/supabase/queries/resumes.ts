@@ -20,7 +20,20 @@ export async function setCurrentResume(userId: string, resumeId: string) {
   await supabase.from("resumes").update({ is_current: true }).eq("id", resumeId);
 }
 
+export async function fetchLatestAnalysis(resumeId: string) {
+  const { data } = await supabase
+    .from("resume_analyses")
+    .select("*")
+    .eq("resume_id", resumeId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ?? null;
+}
+
 export async function saveAnalysis(a: { resume_id: string; user_id: string; position_target: string; match_score: number; strength_points: string[]; risk_points: string[]; predicted_questions: string[] }) {
+  // Upsert: delete old analysis for this resume, then insert new one
+  await supabase.from("resume_analyses").delete().eq("resume_id", a.resume_id);
   const { data } = await supabase.from("resume_analyses").insert(a).select().single();
   return data!;
 }

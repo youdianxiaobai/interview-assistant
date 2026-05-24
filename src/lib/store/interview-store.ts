@@ -1,12 +1,13 @@
 "use client";
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { InterviewConfig, InterviewSession, InterviewPhase, AIFeedback } from "@/types";
 import type { FinalReport } from "@/hooks/use-interview";
 
 interface InterviewState {
   session: InterviewSession | null;
   finalReport: FinalReport | null;
-  initSession: (config: InterviewConfig, questions: string[]) => void;
+  initSession: (interviewId: string, config: InterviewConfig, questions: string[]) => void;
   setPhase: (phase: InterviewPhase) => void;
   recordAnswer: (answer: string, audioUrl?: string) => void;
   setFeedback: (feedback: AIFeedback) => void;
@@ -17,88 +18,94 @@ interface InterviewState {
   reset: () => void;
 }
 
-export const useInterviewStore = create<InterviewState>()((set, get) => ({
-  session: null,
-  finalReport: null,
-
-  initSession: (config, qTexts) =>
-    set({
-      session: {
-        config,
-        phase: "questioning" as InterviewPhase,
-        currentQuestionIndex: 0,
-        questions: qTexts.map((t) => ({
-          text: t,
-          userAnswer: "",
-          feedback: null,
-        })),
-        startTime: Date.now(),
-        elapsedSeconds: 0,
-      },
+export const useInterviewStore = create<InterviewState>()(
+  persist(
+    (set, get) => ({
+      session: null,
       finalReport: null,
-    }),
 
-  setPhase: (phase) =>
-    set((s) => (s.session ? { session: { ...s.session, phase } } : {})),
+      initSession: (interviewId, config, qTexts) =>
+        set({
+          session: {
+            id: interviewId,
+            config,
+            phase: "questioning" as InterviewPhase,
+            currentQuestionIndex: 0,
+            questions: qTexts.map((t) => ({
+              text: t,
+              userAnswer: "",
+              feedback: null,
+            })),
+            startTime: Date.now(),
+            elapsedSeconds: 0,
+          },
+          finalReport: null,
+        }),
 
-  recordAnswer: (answer, audioUrl) =>
-    set((s) => {
-      if (!s.session) return {};
-      const qs = [...s.session.questions];
-      qs[s.session.currentQuestionIndex] = {
-        ...qs[s.session.currentQuestionIndex],
-        userAnswer: answer,
-        userAnswerAudioUrl: audioUrl,
-      };
-      return { session: { ...s.session, questions: qs } };
-    }),
+      setPhase: (phase) =>
+        set((s) => (s.session ? { session: { ...s.session, phase } } : {})),
 
-  setFeedback: (feedback) =>
-    set((s) => {
-      if (!s.session) return {};
-      const qs = [...s.session.questions];
-      qs[s.session.currentQuestionIndex] = {
-        ...qs[s.session.currentQuestionIndex],
-        feedback,
-      };
-      return { session: { ...s.session, questions: qs } };
-    }),
+      recordAnswer: (answer, audioUrl) =>
+        set((s) => {
+          if (!s.session) return {};
+          const qs = [...s.session.questions];
+          qs[s.session.currentQuestionIndex] = {
+            ...qs[s.session.currentQuestionIndex],
+            userAnswer: answer,
+            userAnswerAudioUrl: audioUrl,
+          };
+          return { session: { ...s.session, questions: qs } };
+        }),
 
-  setFeedbackByIndex: (index, feedback) =>
-    set((s) => {
-      if (!s.session) return {};
-      const qs = [...s.session.questions];
-      if (index < qs.length) {
-        qs[index] = { ...qs[index], feedback };
-      }
-      return { session: { ...s.session, questions: qs } };
-    }),
+      setFeedback: (feedback) =>
+        set((s) => {
+          if (!s.session) return {};
+          const qs = [...s.session.questions];
+          qs[s.session.currentQuestionIndex] = {
+            ...qs[s.session.currentQuestionIndex],
+            feedback,
+          };
+          return { session: { ...s.session, questions: qs } };
+        }),
 
-  setFinalReport: (report) => set({ finalReport: report }),
-
-  setElapsed: (seconds) =>
-    set((s) => {
-      if (!s.session) return {};
-      return { session: { ...s.session, elapsedSeconds: seconds } };
-    }),
-
-  nextQuestion: () =>
-    set((s) => {
-      if (!s.session) return {};
-      const next = s.session.currentQuestionIndex + 1;
-      return next >= s.session.questions.length
-        ? {
-            session: {
-              ...s.session,
-              phase: "finished" as InterviewPhase,
-              currentQuestionIndex: next,
-              elapsedSeconds: Math.floor(
-                (Date.now() - (s.session.startTime ?? Date.now())) / 1000
-              ),
-            },
+      setFeedbackByIndex: (index, feedback) =>
+        set((s) => {
+          if (!s.session) return {};
+          const qs = [...s.session.questions];
+          if (index < qs.length) {
+            qs[index] = { ...qs[index], feedback };
           }
-        : { session: { ...s.session, currentQuestionIndex: next } };
-    }),
+          return { session: { ...s.session, questions: qs } };
+        }),
 
-  reset: () => set({ session: null, finalReport: null }),
-}));
+      setFinalReport: (report) => set({ finalReport: report }),
+
+      setElapsed: (seconds) =>
+        set((s) => {
+          if (!s.session) return {};
+          return { session: { ...s.session, elapsedSeconds: seconds } };
+        }),
+
+      nextQuestion: () =>
+        set((s) => {
+          if (!s.session) return {};
+          const next = s.session.currentQuestionIndex + 1;
+          return next >= s.session.questions.length
+            ? {
+                session: {
+                  ...s.session,
+                  phase: "finished" as InterviewPhase,
+                  currentQuestionIndex: next,
+                  elapsedSeconds: Math.floor(
+                    (Date.now() - (s.session.startTime ?? Date.now())) / 1000
+                  ),
+                },
+              }
+            : { session: { ...s.session, currentQuestionIndex: next } };
+        }),
+
+      reset: () => set({ session: null, finalReport: null }),
+    }),
+    { name: "interview-assistant-session" }
+  )
+);
