@@ -29,6 +29,15 @@ export default function InterviewPage() {
   const session = useInterviewStore((s) => s.session);
   const { submitAnswer, goNext } = useInterview();
 
+  // Handle auto-finish (e.g. summary mode after last question) — must be before early return
+  const finishedHandled = useRef(false);
+  useEffect(() => {
+    if (session?.phase === "finished" && !finishedHandled.current) {
+      finishedHandled.current = true;
+      goNext(id);
+    }
+  }, [session?.phase, id, goNext]);
+
   if (!session) {
     return (
       <AppShell>
@@ -51,15 +60,6 @@ export default function InterviewPage() {
       ? (session.currentQuestionIndex / session.questions.length) * 100
       : 0;
   const m = modeLabel[session.config.mode] ?? modeLabel.practice;
-
-  // Handle auto-finish (e.g. summary mode after last question)
-  const finishedHandled = useRef(false);
-  useEffect(() => {
-    if (session.phase === "finished" && !finishedHandled.current) {
-      finishedHandled.current = true;
-      goNext(id);
-    }
-  }, [session.phase, id, goNext]);
 
   return (
     <AppShell>

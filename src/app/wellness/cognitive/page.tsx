@@ -279,7 +279,7 @@ export default function CognitiveRestructuringPage() {
                 {step === 1 && (
                   <div className="p-3 rounded-xl bg-muted/40 border border-border/30">
                     <p className="text-xs font-medium text-muted-foreground mb-1">你之前写下的自动想法</p>
-                    <p className="text-sm text-foreground italic">"{record.autoThought}"</p>
+                    <p className="text-sm text-foreground italic">&ldquo;{record.autoThought}&rdquo;</p>
                   </div>
                 )}
 

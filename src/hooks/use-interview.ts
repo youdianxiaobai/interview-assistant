@@ -96,7 +96,7 @@ export function useInterview() {
 
     // ── summary mode: no per-question feedback, move to next question ──
     nextQuestion();
-  }, [session, apiKey, model, baseUrl, currentUserId, recordAnswer, setFeedback, setPhase]);
+  }, [session, apiKey, model, baseUrl, currentUserId, recordAnswer, setFeedback, setPhase, nextQuestion]);
 
   const generateFinalReport = useCallback(async (): Promise<FinalReport | null> => {
     if (!session || !apiKey) return null;
